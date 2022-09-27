@@ -9,12 +9,12 @@ import (
 	"time"
 )
 
-var verbose bool = true
+var verbose bool = false
 
 // "packet" from pseudo-client/server
-// | dest | src  | seq    | flags  | padding | * size | data     | checksum |
-// | 0x00 | 0x00 | 0x0000 | 000000 | 00...1  | 0x0000 | 0x...    | 0x0000   |
-// | i8   | i8   | i16    | SAIFDC | 3/11 b  | i16    | max size | i16      |
+// | dest | src  | seq    | flags | padding | * size | data     | checksum |
+// | 0x00 | 0x00 | 0x0000 | 00000 | 00...1  | 0x0000 | 0x...    | 0x0000   |
+// | i8   | i8   | i16    | SAIFD | 3/11 b  | i16    | max size | i16      |
 //
 // size = amount of bits in datasection, this only exists if S is 1
 //	it allows the server to expect the amount of data coming in
@@ -41,17 +41,14 @@ var verbose bool = true
 //	implicit prompt for restarting transmission from S flag
 //
 // D = done, i received all sequences :D
-//
-// C = confirmed received all
 
 const (
-	START     byte = 0b10000000
-	ACCEPT         = 0b01000000
-	IGNORE         = 0b00100000
-	FAILURE        = 0b00010000
-	DONE           = 0b00001000
-	CONFIRMED      = 0b00000100
-	EMPTY          = 0b00000000
+	START   byte = 0b10000000
+	ACCEPT       = 0b01000000
+	IGNORE       = 0b00100000
+	FAILURE      = 0b00010000
+	DONE         = 0b00001000
+	EMPTY        = 0b00000000
 )
 
 // https://gist.github.com/chiro-hiro/2674626cebbcb5a676355b7aaac4972d
@@ -161,8 +158,8 @@ func Decode(raw []byte) (corrupt bool, valid bool, dest byte, src byte, seq uint
 	} else {
 		offset += 1
 	}
-	// this flag has no meaning, it should never be true
-	if flag&0b00000010 > 0 {
+	// these flags have no meaning, it should never be true
+	if flag&0b00000110 > 0 {
 		valid = false
 		return
 	}
@@ -271,7 +268,6 @@ await_confirm:
 	// this means that if the server already way at the start knows its receiving junk data
 	// this will still finish sending all of its packets - before receiving the info from server
 	for data_sent < data_to_send {
-		// fmt.Printf("Send(4A-%v): still running...\n", seq)
 		slice_offset = data_sent + int(window)
 		if slice_offset > data_to_send {
 			slice_offset = data_to_send
@@ -282,10 +278,9 @@ await_confirm:
 			fmt.Printf("Send(3+%v): <%s>\n", seq, FmtBits(data[data_sent:slice_offset]))
 		}
 		// it might deceptively seem like we can timeout waiting here forever, but we actually cant
-		// due to the nature of communication going through forwarder, it will always be able to send
+		// due to communication going through forwarder, it will always be able to send
 		c.Write(data_packet)
 		data_sent += int(window)
-		// fmt.Printf("Send(4B-%v): still running...\n", seq)
 		seq++
 	}
 	if data_sent > 0 {
@@ -336,11 +331,6 @@ await_confirm:
 	if flag&DONE == 0 {
 		goto await_confirm
 	}
-	confirm_packet := Encode(dest, src, 0, CONFIRMED, 0, []byte{})
-	if verbose {
-		fmt.Printf("Send(5): <%s>\n", FmtBits(confirm_packet))
-	}
-	c.Write(confirm_packet)
 	return
 }
 
@@ -445,43 +435,6 @@ await_start:
 		fmt.Printf("Recv(4): <%s>\n", FmtBits(done_packet))
 	}
 
-resend_done:
 	c.Write(done_packet)
-
-	// await confirmation packet
-	c.SetReadDeadline(time.Now().Add(5 * time.Second))
-	n, err = c.Read(buffer)
-	c.SetReadDeadline(time.Time{})
-	if err != nil {
-		if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
-			fmt.Println("Our DONE wasn't confirmed - retrying")
-			goto resend_done
-		}
-		e = err
-		return
-	}
-
-	corrupt, valid, _, _, _, flag, _, _ = Decode(buffer[:n])
-	if verbose {
-		fmt.Printf("Recv(5): <%s>\n", FmtBits(buffer[:n]))
-	}
-	if corrupt || !valid {
-		if verbose {
-			fmt.Printf("Recv(5A): Failed...\n")
-		}
-		goto await_start
-	}
-	if flag&FAILURE > 0 {
-		if verbose {
-			fmt.Printf("Send(5B): Failed...\n")
-		}
-		goto await_start
-	}
-	if flag&CONFIRMED == 0 {
-		if verbose {
-			fmt.Printf("Send(5C): Failed...\n")
-		}
-		goto await_start
-	}
 	return
 }

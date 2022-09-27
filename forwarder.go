@@ -14,6 +14,15 @@ import (
 
 var verbose bool = true
 
+// network has bad jitter
+var jitter bool = false
+
+// percentage for packet to be dropped, ignored
+var drop_packet int = 0
+
+// percentage for packet to have a bit flipped
+var flip_bit int = 0
+
 // make sure we dont update packets in different goroutines
 var m sync.Mutex
 
@@ -37,14 +46,17 @@ func handleSend(c net.Conn, id byte) {
 		m.Lock()
 		if len(packets[id]) > 0 {
 			// shuffling array to simulate really bad jitter, this is way overkill
-			// but it showcases how my model implementation can survive this attack
-			dest := make([][]byte, len(packets[id]))
-			perm := rand.Perm(len(packets[id]))
-			for i, v := range perm {
-				dest[v] = packets[id][i]
+			// but it showcases how my model implementation can (sometimes) survive this attack
+			if jitter {
+				dest := make([][]byte, len(packets[id]))
+				perm := rand.Perm(len(packets[id]))
+				for i, v := range perm {
+					dest[v] = packets[id][i]
+				}
+				p, packets[id] = dest[0], dest[1:]
+			} else {
+				p, packets[id] = packets[id][0], packets[id][1:]
 			}
-			p, packets[id] = dest[0], dest[1:]
-			// p, packets[id] = packets[id][0], packets[id][1:]
 			c.Write(p)
 		}
 		m.Unlock()
@@ -79,9 +91,6 @@ func handleReceive(c net.Conn) {
 			fmt.Println(err)
 			goto errored
 		}
-		if verbose {
-			//fmt.Printf("handleRecv<%c> - received data\n", id)
-		}
 
 		// note, we dont use valid, since its not the forwarders responsibility
 		corrupt, _, dest, _, _, flag, _, _ := packet.Decode(buffer[:n])
@@ -104,10 +113,6 @@ func handleReceive(c net.Conn) {
 		}
 		if !corrupt {
 			m.Lock()
-			//fmt.Println("handleRecv", id, "- appended to", dest)
-			if verbose {
-				//fmt.Printf("handleRecv<%c> - appended to <%c>\n", id, dest)
-			}
 			packets[dest] = append(packets[dest], buffer[:n])
 			m.Unlock()
 		}
