@@ -18,7 +18,7 @@ var verbose bool = true
 var jitter bool = false
 
 // percentage for packet to be dropped, ignored
-var drop_packet int = 0
+var drop_packet int = 15
 
 // percentage for packet to have a bit flipped
 var flip_bit int = 0
@@ -45,8 +45,8 @@ func handleSend(c net.Conn, id byte) {
 		}
 		m.Lock()
 		if len(packets[id]) > 0 {
-			// shuffling array to simulate really bad jitter, this is way overkill
-			// but it showcases how my model implementation can (sometimes) survive this attack
+			// shuffling array to simulate really bad jitter
+			// model implementation can (sometimes) survive this attack
 			if jitter {
 				dest := make([][]byte, len(packets[id]))
 				perm := rand.Perm(len(packets[id]))
@@ -57,7 +57,16 @@ func handleSend(c net.Conn, id byte) {
 			} else {
 				p, packets[id] = packets[id][0], packets[id][1:]
 			}
-			c.Write(p)
+			n := rand.Intn(100)
+			if drop_packet > n {
+				fmt.Printf("handleRecv<%c> dropped - <%s>\n", id, packet.FmtBits(p))
+			} else {
+				n = rand.Intn(100)
+				if flip_bit > n {
+					p[len(p)-3] &= 0x00
+				}
+				c.Write(p)
+			}
 		}
 		m.Unlock()
 	}
@@ -98,7 +107,6 @@ func handleReceive(c net.Conn) {
 			switch flag {
 			case packet.START:
 				fmt.Printf("handleRecv<%c> - START PACKET to <%c>\n", id, dest)
-				//buffer[n-1] &= 0x00
 			case packet.ACCEPT:
 				fmt.Printf("handleRecv<%c> - ACCEPT PACKET to <%c>\n", id, dest)
 			case packet.DONE:
@@ -126,6 +134,7 @@ errored:
 func main() {
 	arguments := os.Args
 	PORT := ""
+	rand.Seed(time.Now().UnixNano())
 	if len(arguments) == 1 {
 		fmt.Println("Using default port of 4004\n________________\n")
 		PORT = ":4004"

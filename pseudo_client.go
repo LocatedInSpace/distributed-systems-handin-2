@@ -46,14 +46,14 @@ func main() {
 		text, _ := reader.ReadString('\n')
 		text = strings.Replace(text, "\n", "", -1)
 		fmt.Printf("--------------------------\n| Sending data to 's'\n_______\n| %s\n--------------------------\n", text)
-		err = packet.Send(c, id, 's', []byte(text), 2, 10)
-		//err = packet.Send(c, id, 's', []byte(text), uint16(len(text)), 0)
+		//err = packet.Send(c, id, 's', []byte(text), 2, 10)
+		err = packet.Send(c, id, 's', []byte(text), uint16(len(text)), 10)
 		if err != nil {
 			fmt.Println(err)
 			continue
 		}
 
-		data, _, err := packet.Recv(c, id)
+		data, _, err := packet.Recv(c, id, 5)
 		if err != nil {
 			fmt.Println(err)
 			continue

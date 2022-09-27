@@ -335,13 +335,20 @@ await_confirm:
 }
 
 // Recv is the complimentary wrapper to Send - they need to be used in combination
-func Recv(c net.Conn, src byte) (data []byte, srcR byte, e error) {
+func Recv(c net.Conn, src byte, wait uint8) (data []byte, srcR byte, e error) {
 	// 65543 is max size of our 'packet'
 	buffer := make([]byte, 65543)
 
 await_start:
+	if wait > 0 {
+		c.SetReadDeadline(time.Now().Add(time.Duration(wait) * time.Second))
+	}
 	n, err := c.Read(buffer)
+	c.SetReadDeadline(time.Time{})
 	if err != nil {
+		if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
+			fmt.Println("Timed out waiting for START-packet")
+		}
 		e = err
 		return
 	}

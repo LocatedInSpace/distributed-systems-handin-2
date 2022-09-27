@@ -42,23 +42,22 @@ func main() {
 
 	// ------------ EXAMPLE 1, ECHO SERVER ---------------
 	for {
-		data, dest, err := packet.Recv(c, id)
+		data, dest, err := packet.Recv(c, id, 0)
 		if err != nil {
 			fmt.Println(err)
 			return
 		}
 		fmt.Printf("Received from <%c>: %s\nSending it back...\n", dest, string(data))
 
-		err = packet.Send(c, id, dest, data, uint16(len(data)), 0)
+		err = packet.Send(c, id, dest, data, uint16(len(data)), 3)
 		if err != nil {
 			fmt.Println(err)
-			return
 		}
 	}
 
 	// ------------ EXAMPLE 2, RECV/LISTEN/PING SERVER ---------------
 	// for {
-	// 	_, dest, err := packet.Recv(c, id)
+	// 	_, dest, err := packet.Recv(c, id, 0)
 	// 	if err != nil {
 	// 		fmt.Println(err)
 	// 		return
