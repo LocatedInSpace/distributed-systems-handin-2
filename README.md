@@ -1,7 +1,7 @@
 # a) What are packets in implementation . . .
-I've recreated a simple TCP-inspired send & receive (on top of Golangs net-package) - that means, all of the communication happens in bytes.
+We've recreated a simple TCP-inspired send & receive (on top of Golangs net-package) - that means, all of the communication happens in bytes.
 
-As seen in `packet/packet.go`, this is how I've laid out a packet.
+As seen in `packet/packet.go`, this is how we've laid out a packet.
 ```go
 // "packet" from pseudo-client/server
 // | dest | src  | seq    | flags | padding | * size | data     | checksum |
@@ -20,16 +20,20 @@ Image of communication (see forwarder output on the left), where every packet ge
 >![Less than ideal TCP-behaviour](images/streampacketsdone.png)
 Image of communication (see forwarder output on the left), where it waits till stream of packets have come in to determine whether or not communication succeeded - ignore the noise in server (topright) & client (bottomright), verbose output is needed when splitting up data to several packets. See note way at bottom of README.md
 
+Since the 'packets' and their communication happens on a TCP *inspired* protocol, we also made a localized state-machine TCP-simulation (without networking) to cement that we do understand the protocol - this can be found in the file `tcpsimulation.go`
+
 # b) Does implementation use threads . . .
-There are three separate processes needed to run my implementation, the `forwarder`, the `pseudo_server`, and the `pseudo_client`. The `forwarder` is the only one that differs from the others, since it has 2 goroutines running for each connection (a sender, and a receiver) - where as the pseudo_* only have a main-routine that they loop.
+There are three separate processes needed to run our networked implementation, the `forwarder`, the `pseudo_server`, and the `pseudo_client`. The `forwarder` is the only one that differs from the others, since it has 2 goroutines running for each connection (a sender, and a receiver) - where as the pseudo_* only have a main-routine that they loop.
 
 Threads are not realistic to use on a larger scale due to blocking when reading and writing - you can also only spawn so many threads before the OS it's running on starts complaining.
+
+We do however use threads in our `tcpsimulation`, since this is meant to simply be an addendum (akin to part 1 of the hand-in)
 
 # c) Message reordering . . .
 When the program is used as intended with a high `window`-parameter, then the state machine takes care of message reordering - neither client or server will send more than one packet without first getting a response
 > There is one exception to this, that is if the server wants to send data after it is done receiving, in that case - you can imagine it sending a DONE-packet to client, and then a START-packet right after. If these two were to get switched, then the clients state machine will restart, since it was expecting a DONE-packet, not a start.
 
-When used with a low `window`-parameter, my implementation takes advantage of the fact that we acknowledge the finished stream, not the individual packets - therefore, the data-packets can arrive in any order, as the seq-field will tell us in what order to combine them.
+When used with a low `window`-parameter, our implementation takes advantage of the fact that we acknowledge the finished stream, not the individual packets - therefore, the data-packets can arrive in any order, as the seq-field will tell us in what order to combine them.
 
 # d) How does it handle message loss . . .
 If an expected packet never arrives - or the one that arrives has a different state, then it will simply discard all state and start anew. It does not support recovering part of state, nor prompt the other what packet is missing/wrong - it only tells it that it failed, so that the other party can start sending from start aswell.
@@ -38,7 +42,9 @@ If an expected packet never arrives - or the one that arrives has a different st
 It's fine...  definitely not fast at recovering, and depending on `tolerance`-parameter, it might stop trying after enough attempts.
 
 # e) 3-way-handshake importance . . .
-The 3-way-handshake is important since it's the building block for TCP-communication which allows for more trustworthy information exchange on unreliable networks - it does this by allowing server & client to synchronize their segment sequence numbers, meaning once a stream is established between them, either part of the exchange can notice if there is data missing.
+The only way to be sure that a part got a packet to the other side is to get a confirmation from that part, which would be sent if that packet got through. In theory, this can go on into infinity before you can be 100% sure, but the 3-way handshake is good enough for most purposes. 
+
+The 3-way-handshake acts as the building block for TCP-communication which allows for more trustworthy information exchange on unreliable networks - it does this by allowing server & client to synchronize their segment sequence numbers, meaning once a stream is established between them, either part of the exchange can notice if there is data missing.
 
 e.g., if in the next packet received ACK is wildly out of sync with where other party expected it, then it can try to recover lost communication by replaying packets that were missed. Another important part, is that packets sent by TCP have checksums associated with them, that increase the likelihood of the packet being correct.
 # Addendum
