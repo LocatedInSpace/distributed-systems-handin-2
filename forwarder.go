@@ -63,6 +63,7 @@ func handleSend(c net.Conn, id byte) {
 			} else {
 				n = rand.Intn(100)
 				if flip_bit > n {
+					fmt.Printf("handleRecv<%c> flipped some bits\n", id)
 					p[len(p)-3] &= 0x00
 				}
 				c.Write(p)
