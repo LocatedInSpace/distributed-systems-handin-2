@@ -18,10 +18,10 @@ var verbose bool = true
 var jitter bool = false
 
 // percentage for packet to be dropped, ignored
-var drop_packet int = 15
+var drop_packet int = 0
 
-// percentage for packet to have a bit flipped
-var flip_bit int = 0
+// percentage for packet to have a byte zeroed
+var zero_bit int = 0
 
 // make sure we dont update packets in different goroutines
 var m sync.Mutex
@@ -62,7 +62,7 @@ func handleSend(c net.Conn, id byte) {
 				fmt.Printf("handleRecv<%c> dropped - <%s>\n", id, packet.FmtBits(p))
 			} else {
 				n = rand.Intn(100)
-				if flip_bit > n {
+				if zero_bit > n {
 					fmt.Printf("handleRecv<%c> flipped some bits\n", id)
 					p[len(p)-3] &= 0x00
 				}

@@ -34,6 +34,9 @@ When used with a low `window`-parameter, my implementation takes advantage of th
 # d) How does it handle message loss . . .
 If an expected packet never arrives - or the one that arrives has a different state, then it will simply discard all state and start anew. It does not support recovering part of state, nor prompt the other what packet is missing/wrong - it only tells it that it failed, so that the other party can start sending from start aswell.
 
+>![15% packet loss](images/packetlossrecovery.png)
+It's fine...  definitely not fast at recovering, and depending on `tolerance`-parameter, it might stop trying after enough attempts.
+
 # e) 3-way-handshake importance . . .
 The 3-way-handshake is important since it's the building block for TCP-communication which allows for more trustworthy information exchange on unreliable networks - it does this by allowing server & client to synchronize their segment sequence numbers, meaning once a stream is established between them, either part of the exchange can notice if there is data missing.
 
@@ -61,8 +64,8 @@ Inside of `pseudo_server.go` & `pseudo_client.go`, there are two example usages 
     // percentage for packet to be dropped, ignored
     var drop_packet int = 0
 
-    // percentage for packet to have a bit flipped
-    var flip_bit int = 0
+    // percentage for packet to have a byte zeroed
+    var zero_bit int = 0
     ```
 
 >It is worth noting, that the effects of jitter wont be seen, unless the `window`-parameter in `packet.Send()` is less than the size of the data to be sent.
